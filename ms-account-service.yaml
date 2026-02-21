@@ -1,0 +1,1036 @@
+openapi: 3.0.3
+info:
+  title: MS Account Service API
+  description: 
+    Account Service microservice for Challenge Bank.
+    Manages customer checking accounts, balances, and fund availability validation.
+  version: 1.0.0
+  contact:
+    name: Challenge Bank API Support
+    email: api-support@challengebank.com
+
+servers:
+  - url: https://api.challengebank.com/v1
+    description: Production server
+  - url: https://api-staging.challengebank.com/v1
+    description: Staging server
+  - url: http://localhost:8081/v1
+    description: Local development server
+
+tags:
+  - name: Accounts
+    description: Account management operations
+  - name: Balance
+    description: Balance inquiry and management operations
+  - name: Validation
+    description: Fund availability validation operations
+
+paths:
+  /accounts:
+    get:
+      tags:
+        - Accounts
+      summary: Get all accounts
+      description: Retrieves a paginated list of all accounts
+      operationId: getAllAccounts
+      parameters:
+        - name: page
+          in: query
+          description: Page number (zero-based)
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by account status
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE, BLOCKED, CLOSED]
+        - name: accountType
+          in: query
+          description: Filter by account type
+          required: false
+          schema:
+            type: string
+            enum: [CHECKING, SAVINGS, BUSINESS, PREMIUM]
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPageResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+    post:
+      tags:
+        - Accounts
+      summary: Create a new account
+      description: Creates a new bank account for a customer
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Account already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/{accountNumber}:
+    get:
+      tags:
+        - Accounts
+      summary: Get account by number
+      description: Retrieves detailed information about a specific account
+      operationId: getAccountByNumber
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+    put:
+      tags:
+        - Accounts
+      summary: Update account
+      description: Updates an existing account's information
+      operationId: updateAccount
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+      responses:
+        '200':
+          description: Account updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+    delete:
+      tags:
+        - Accounts
+      summary: Close account
+      description: Closes an account (soft delete - sets status to CLOSED)
+      operationId: closeAccount
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      responses:
+        '204':
+          description: Account closed successfully
+        '400':
+          description: Cannot close account (e.g., balance not zero)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/customer/{customerId}:
+    get:
+      tags:
+        - Accounts
+      summary: Get accounts by customer ID
+      description: Retrieves all accounts belonging to a specific customer
+      operationId: getAccountsByCustomerId
+      parameters:
+        - name: customerId
+          in: path
+          description: Customer identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountResponse'
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/{accountNumber}/status:
+    patch:
+      tags:
+        - Accounts
+      summary: Update account status
+      description: Updates the status of an account
+      operationId: updateAccountStatus
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStatusRequest'
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          description: Invalid status value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/{accountNumber}/balance:
+    get:
+      tags:
+        - Balance
+      summary: Get account balance
+      description: Retrieves the current balance of an account
+      operationId: getAccountBalance
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/{accountNumber}/balance/update:
+    post:
+      tags:
+        - Balance
+      summary: Update account balance
+      description: Updates the balance of an account (for internal use - deposits/withdrawals)
+      operationId: updateAccountBalance
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBalanceRequest'
+      responses:
+        '200':
+          description: Balance updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '400':
+          description: Invalid operation (e.g., insufficient funds)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/validate/funds:
+    post:
+      tags:
+        - Validation
+      summary: Validate fund availability
+      description: Checks if an account has sufficient funds for a transaction
+      operationId: validateFunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateFundsRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundsValidationResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/{accountNumber}/validate:
+    get:
+      tags:
+        - Validation
+      summary: Validate account
+      description: Checks if an account exists and is active
+      operationId: validateAccount
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountValidationResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/{accountNumber}/reserve:
+    post:
+      tags:
+        - Balance
+      summary: Reserve funds
+      description: Temporarily reserves funds for a pending transaction
+      operationId: reserveFunds
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReserveFundsRequest'
+      responses:
+        '200':
+          description: Funds reserved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '400':
+          description: Insufficient funds or invalid amount
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /accounts/{accountNumber}/reserve/{reservationId}/release:
+    post:
+      tags:
+        - Balance
+      summary: Release reserved funds
+      description: Releases previously reserved funds
+      operationId: releaseReservedFunds
+      parameters:
+        - name: accountNumber
+          in: path
+          description: Account number
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{10,20}$'
+        - name: reservationId
+          in: path
+          description: Reservation identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Funds released successfully
+        '404':
+          description: Account or reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+components:
+  schemas:
+    AccountResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Unique account identifier
+          example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+        accountNumber:
+          type: string
+          description: Account number
+          example: "1234567890123456"
+        customerId:
+          type: string
+          format: uuid
+          description: Customer owner identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        accountType:
+          type: string
+          description: Type of account
+          enum: [CHECKING, SAVINGS, BUSINESS, PREMIUM]
+          example: "CHECKING"
+        balance:
+          type: number
+          format: double
+          description: Current account balance
+          example: 15750.50
+        availableBalance:
+          type: number
+          format: double
+          description: Available balance (balance - reserved funds)
+          example: 15250.50
+        currency:
+          type: string
+          description: Currency code
+          example: "USD"
+          default: "USD"
+        status:
+          type: string
+          description: Current account status
+          enum: [ACTIVE, INACTIVE, BLOCKED, CLOSED]
+          example: "ACTIVE"
+        overdraftLimit:
+          type: number
+          format: double
+          description: Overdraft limit (if applicable)
+          example: 500.00
+        interestRate:
+          type: number
+          format: double
+          description: Interest rate for savings accounts
+          example: 2.5
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when account was created
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when account was last updated
+          example: "2024-01-20T14:45:00Z"
+        lastTransactionDate:
+          type: string
+          format: date-time
+          description: Date of last transaction
+          example: "2024-01-25T09:15:00Z"
+      required:
+        - accountId
+        - accountNumber
+        - customerId
+        - accountType
+        - balance
+        - availableBalance
+        - currency
+        - status
+        - createdAt
+
+    CreateAccountRequest:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Customer owner identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        accountType:
+          type: string
+          description: Type of account to create
+          enum: [CHECKING, SAVINGS, BUSINESS, PREMIUM]
+          example: "CHECKING"
+        initialDeposit:
+          type: number
+          format: double
+          description: Initial deposit amount
+          minimum: 0
+          example: 1000.00
+        currency:
+          type: string
+          description: Currency code
+          example: "USD"
+          default: "USD"
+        overdraftLimit:
+          type: number
+          format: double
+          description: Overdraft limit (optional)
+          minimum: 0
+          example: 500.00
+      required:
+        - customerId
+        - accountType
+        - initialDeposit
+
+    UpdateAccountRequest:
+      type: object
+      properties:
+        overdraftLimit:
+          type: number
+          format: double
+          description: New overdraft limit
+          minimum: 0
+        interestRate:
+          type: number
+          format: double
+          description: New interest rate (for savings accounts)
+          minimum: 0
+          maximum: 100
+
+    UpdateStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          description: New status for the account
+          enum: [ACTIVE, INACTIVE, BLOCKED, CLOSED]
+          example: "BLOCKED"
+        reason:
+          type: string
+          maxLength: 500
+          description: Reason for status change
+          example: "Suspicious activity detected"
+      required:
+        - status
+
+    BalanceResponse:
+      type: object
+      properties:
+        accountNumber:
+          type: string
+          description: Account number
+          example: "1234567890123456"
+        balance:
+          type: number
+          format: double
+          description: Current balance
+          example: 15750.50
+        availableBalance:
+          type: number
+          format: double
+          description: Available balance
+          example: 15250.50
+        reservedAmount:
+          type: number
+          format: double
+          description: Total reserved amount
+          example: 500.00
+        currency:
+          type: string
+          description: Currency code
+          example: "USD"
+        lastUpdated:
+          type: string
+          format: date-time
+          description: Last balance update timestamp
+          example: "2024-01-25T14:30:00Z"
+      required:
+        - accountNumber
+        - balance
+        - availableBalance
+        - currency
+        - lastUpdated
+
+    UpdateBalanceRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          description: Amount to add (positive) or subtract (negative)
+          example: 500.00
+        operation:
+          type: string
+          description: Type of operation
+          enum: [DEPOSIT, WITHDRAWAL, ADJUSTMENT]
+          example: "DEPOSIT"
+        description:
+          type: string
+          maxLength: 500
+          description: Description of the operation
+          example: "ATM deposit"
+        referenceId:
+          type: string
+          description: External reference identifier
+          example: "TXN-12345"
+      required:
+        - amount
+        - operation
+
+    ValidateFundsRequest:
+      type: object
+      properties:
+        accountNumber:
+          type: string
+          description: Account number to validate
+          pattern: '^[0-9]{10,20}$'
+          example: "1234567890123456"
+        amount:
+          type: number
+          format: double
+          description: Amount to validate
+          minimum: 0.01
+          example: 1500.00
+        includeOverdraft:
+          type: boolean
+          description: Whether to include overdraft limit in validation
+          default: false
+          example: false
+      required:
+        - accountNumber
+        - amount
+
+    FundsValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Whether sufficient funds are available
+          example: true
+        accountNumber:
+          type: string
+          description: Account number
+          example: "1234567890123456"
+        requestedAmount:
+          type: number
+          format: double
+          description: Amount requested for validation
+          example: 1500.00
+        availableBalance:
+          type: number
+          format: double
+          description: Current available balance
+          example: 15250.50
+        overdraftAvailable:
+          type: number
+          format: double
+          description: Available overdraft amount
+          example: 500.00
+        totalAvailable:
+          type: number
+          format: double
+          description: Total available funds (balance + overdraft)
+          example: 15750.50
+        message:
+          type: string
+          description: Validation message
+          example: "Sufficient funds available"
+      required:
+        - valid
+        - accountNumber
+        - requestedAmount
+        - availableBalance
+
+    AccountValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Whether the account is valid
+          example: true
+        accountNumber:
+          type: string
+          description: Account number
+          example: "1234567890123456"
+        exists:
+          type: boolean
+          description: Whether the account exists
+          example: true
+        status:
+          type: string
+          description: Current account status
+          enum: [ACTIVE, INACTIVE, BLOCKED, CLOSED]
+          example: "ACTIVE"
+        message:
+          type: string
+          description: Validation message
+          example: "Account is active and valid"
+      required:
+        - valid
+        - accountNumber
+        - exists
+
+    ReserveFundsRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          description: Amount to reserve
+          minimum: 0.01
+          example: 500.00
+        description:
+          type: string
+          maxLength: 500
+          description: Description of the reservation
+          example: "Pending transfer to account 9876543210"
+        expirationMinutes:
+          type: integer
+          description: Minutes until reservation expires
+          minimum: 1
+          maximum: 1440
+          default: 30
+          example: 30
+      required:
+        - amount
+
+    ReservationResponse:
+      type: object
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+          description: Unique reservation identifier
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        accountNumber:
+          type: string
+          description: Account number
+          example: "1234567890123456"
+        amount:
+          type: number
+          format: double
+          description: Reserved amount
+          example: 500.00
+        expiresAt:
+          type: string
+          format: date-time
+          description: Reservation expiration timestamp
+          example: "2024-01-25T15:00:00Z"
+        status:
+          type: string
+          description: Reservation status
+          enum: [ACTIVE, RELEASED, EXPIRED]
+          example: "ACTIVE"
+      required:
+        - reservationId
+        - accountNumber
+        - amount
+        - expiresAt
+        - status
+
+    AccountPageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountResponse'
+        page:
+          type: integer
+          description: Current page number
+          example: 0
+        size:
+          type: integer
+          description: Number of items per page
+          example: 20
+        totalElements:
+          type: integer
+          description: Total number of accounts
+          example: 250
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 13
+      required:
+        - content
+        - page
+        - size
+        - totalElements
+        - totalPages
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when the error occurred
+          example: "2024-01-25T15:30:00Z"
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+        error:
+          type: string
+          description: Error type
+          example: "Bad Request"
+        message:
+          type: string
+          description: Error message
+          example: "Insufficient funds for the requested operation"
+        path:
+          type: string
+          description: Request path that caused the error
+          example: "/v1/accounts/1234567890123456/balance/update"
+        errors:
+          type: array
+          description: List of specific validation errors
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: "amount"
+              message:
+                type: string
+                example: "Amount must be greater than zero"
+      required:
+        - timestamp
+        - status
+        - error
+        - message
+        - path
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+security:
+  - bearerAuth: []
