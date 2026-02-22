@@ -177,7 +177,8 @@ class AccountServiceTest {
         List<Account> accounts = List.of(new Account());
         AccountPageResponse expectedPage = new AccountPageResponse();
 
-        when(accountRepository.findByStatusAndAccountType(AccountStatus.ACTIVE, AccountType.CHECKING)).thenReturn(query);
+        when(accountRepository.findByStatusAndAccountType(AccountStatus.ACTIVE, AccountType.CHECKING))
+                .thenReturn(query);
         when(query.page(any(Page.class))).thenReturn(query);
         when(query.list()).thenReturn(accounts);
         when(query.count()).thenReturn(2L);

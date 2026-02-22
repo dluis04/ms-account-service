@@ -11,7 +11,6 @@ import com.challengebank.account.model.entity.FundReservation;
 import com.challengebank.account.model.enums.AccountStatus;
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
