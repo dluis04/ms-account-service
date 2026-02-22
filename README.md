@@ -22,6 +22,10 @@ ms-account-service/
 │   │   └── GlobalExceptionHandler.java    # Centralized ExceptionMappers
 │   ├── health/
 │   │   └── DatabaseHealthCheck.java       # Database health check
+│   ├── kafka/
+│   │   ├── TransactionEventConsumer.java  # Kafka consumer for transaction events
+│   │   └── event/
+│   │       └── TransactionEvent.java      # Transaction event model
 │   ├── logging/
 │   │   └── CorrelationIdFilter.java       # Correlation ID in requests
 │   ├── mapper/
@@ -41,8 +45,8 @@ ms-account-service/
 ├── src/main/resources/
 │   ├── application.properties             # Main configuration
 │   ├── db/migration/                      # Flyway migrations
-│   ├── publicKey.pem                      # JWT public key
-│   └── privateKey.pem                     # JWT private key
+│   ├── publicKey.pem                      # JWT public key (not tracked in git)
+│   └── privateKey.pem                     # JWT private key (not tracked in git)
 └── src/test/                              # Unit and integration tests
 ```
 
@@ -62,10 +66,86 @@ ms-account-service/
 | PostgreSQL | 16 | Database |
 | Hibernate ORM Panache | - | Persistence |
 | SmallRye JWT | - | Authentication |
+| SmallRye Reactive Messaging | - | Kafka integration |
+| Apache Kafka | - | Event streaming |
 | Micrometer + Prometheus | - | Metrics |
 | Flyway | - | DB Migrations |
 | JUnit 5 + Mockito | - | Testing |
 | Docker | - | Containers |
+
+## Kafka Integration
+
+This service acts as a **Kafka consumer**. It listens for transaction events published by `ms-transaction-service` and records them in the audit log.
+
+### Topics
+
+| Channel | Topic | Description |
+|---|---|---|
+| `transactions-completed` | `transactions.completed` | Successful transactions |
+| `transactions-failed` | `transactions.failed` | Failed transactions |
+
+### Consumer Group
+
+```
+account-service-group
+```
+
+### Consumer Implementation
+
+**File:** `src/main/java/com/challengebank/account/kafka/TransactionEventConsumer.java`
+
+| Method | Channel | Action |
+|---|---|---|
+| `onTransactionCompleted()` | `transactions-completed` | Logs `[AUDIT]` with transaction details (ID, type, accounts, amount, currency, initiated by) |
+| `onTransactionFailed()` | `transactions-failed` | Logs `[AUDIT]` warning with error message |
+
+### TransactionEvent Model
+
+| Field | Type | Description |
+|---|---|---|
+| `eventId` | `String` | Unique event identifier |
+| `eventType` | `String` | Event type |
+| `transactionId` | `String` | Transaction identifier |
+| `transactionType` | `String` | Type of transaction (TRANSFER, DEPOSIT, etc.) |
+| `sourceAccountNumber` | `String` | Origin account |
+| `destinationAccountNumber` | `String` | Destination account |
+| `amount` | `double` | Transaction amount |
+| `fee` | `double` | Applied fee |
+| `totalAmount` | `double` | Total including fee |
+| `currency` | `String` | Currency (USD, etc.) |
+| `status` | `String` | Transaction status |
+| `referenceNumber` | `String` | External reference number |
+| `initiatedBy` | `String` | User who initiated the transaction |
+| `errorMessage` | `String` | Error message (only for failed events) |
+| `timestamp` | `LocalDateTime` | Event timestamp |
+
+### Kafka Configuration
+
+```properties
+kafka.bootstrap.servers=localhost:9092
+
+mp.messaging.incoming.transactions-completed.connector=smallrye-kafka
+mp.messaging.incoming.transactions-completed.topic=transactions.completed
+mp.messaging.incoming.transactions-completed.group.id=account-service-group
+mp.messaging.incoming.transactions-completed.auto.offset.reset=earliest
+
+mp.messaging.incoming.transactions-failed.connector=smallrye-kafka
+mp.messaging.incoming.transactions-failed.topic=transactions.failed
+mp.messaging.incoming.transactions-failed.group.id=account-service-group
+mp.messaging.incoming.transactions-failed.auto.offset.reset=earliest
+```
+
+### Event Flow
+
+```
+ms-transaction-service
+        │
+        ├──► transactions.completed ──► onTransactionCompleted() ──► [AUDIT] INFO log
+        │
+        └──► transactions.failed    ──► onTransactionFailed()    ──► [AUDIT] WARN log
+```
+
+> **Note:** Kafka consumers run asynchronously in the background and do not affect REST API responses. Tests use `smallrye-in-memory` connector instead of a real Kafka instance.
 
 ## Connection with ms-customer-service
 
