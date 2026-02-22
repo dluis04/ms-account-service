@@ -17,6 +17,6 @@ COPY --from=build /app/target/quarkus-app /app
 
 EXPOSE 8081
 
-ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0"
+ENV QUARKUS_HTTP_HOST=0.0.0.0
 
 ENTRYPOINT ["java", "-jar", "/app/quarkus-run.jar"]
